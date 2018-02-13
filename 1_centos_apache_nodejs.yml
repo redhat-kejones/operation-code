@@ -1,0 +1,130 @@
+- hosts: localhost
+  name: playbook to install and configure Apache and node.js
+  remote_user: centos
+  become: yes
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: set hostname
+      hostname:
+        name: "{{ hostname_full }}"
+
+    - name: test to see if selinux is running
+      command: getenforce
+      register: sestatus
+      changed_when: false
+
+    - name: update packages
+      yum:
+        name: '*'
+        state: latest
+      register: yum_result
+      async: 1000
+      poll: 30
+
+    - name: check Kernel is the Latest
+      shell: if [ $(uname -r) == $(rpm -q kernel | tail -n 1 | sed -e 's/kernel-//g') ] ; then echo no ; else echo reboot; fi
+      ignore_errors: true
+      register: reboot_hint
+
+    - name: install git, wget, and httpd
+      yum: 
+        name: '{{ item }}'
+        state: latest
+      with_items:
+        - git
+        - wget
+        - httpd
+
+    - name: create /opt/node directory
+      file:
+        path: /opt/node/etc
+        state: directory
+
+    - name: download node.js v8.9.4
+      get_url:
+        url: https://nodejs.org/dist/v8.9.4/node-v8.9.4-linux-x64.tar.xz
+        dest: /home/centos
+
+    - name: extract node.js tarball into /opt/node
+      unarchive:
+        src: node-v8.9.4-linux-x64.tar.xz
+        dest: /opt/node
+
+    - name: change ownership of /opt/node recursively
+      file:
+        path: /opt/node
+        owner: root
+        group: root
+
+    - name: add node command to path
+      file:
+        src: "/opt/node/bin/{{ item.path }}"
+        dest: "/usr/bin/{{ item.dest }}"
+        state: link
+      with_items:
+        - { path: 'node', dest: 'node' }
+        - { path: 'npm', dest: 'npm' }
+
+    - name: install pm2 node.js package globally
+      npm:
+        name: pm2
+        global: yes
+
+    - name: add pm2 command to path
+      file:
+        src: "/opt/node/bin/pm2"
+        dest: "/usr/bin/pm2"
+        state: link
+
+    - name: enable pm2 on startup
+      command: "pm2 startup systemd -u centos --hp /home/centos"
+
+    - name: start operation-code hello node.js app with pm2
+      command: "pm2 start /home/centos/operation-code/hello.js"
+      ignore_errors: yes
+
+    - name: save pm2 configuration
+      command: "pm2 save"
+
+    - name: enable service httpd and ensure it is not masked
+      systemd:
+        name: httpd
+        enabled: yes
+        masked: no
+
+    - name: Make sure httpd service is running
+      systemd: state=started name=httpd
+
+    - name: copy over apache virtual host configuration
+      copy:
+        src: /home/centos/operation-code/00-node.conf
+        dest: /etc/httd/conf.d/00-node.conf
+
+    - name: restart httpd
+      service: name=httpd state=restarted
+
+    - name: allow httpd to connect to node.js process
+      seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+
+    - name: restart server to get updated kernel
+      shell: sleep 2 && shutdown -r now "Ansible Restart Triggered for Undercloud Install"
+      async: 1
+      poll: 0
+      ignore_errors: true
+      when: yum_result.changed or reboot_hint.stdout.find("reboot") != -1
+
+    - name: waiting for server to come back
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        state: started
+        delay: 10
+        connect_timeout: 5
+        timeout: 300
+        port: 22
+      delegate_to: 127.0.0.1
+      become: false
+      ignore_errors: true

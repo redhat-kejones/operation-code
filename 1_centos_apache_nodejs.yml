@@ -5,9 +5,9 @@
   vars_files:
     - vars.yml
   tasks:
-    - name: set hostname
-      hostname:
-        name: "{{ hostname_full }}"
+    #- name: set hostname
+    #  hostname:
+    #    name: "{{ hostname_full }}"
 
     - name: test to see if selinux is running
       command: getenforce

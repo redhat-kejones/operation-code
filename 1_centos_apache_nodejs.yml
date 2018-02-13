@@ -100,7 +100,7 @@
     - name: copy over apache virtual host configuration
       copy:
         src: /home/centos/operation-code/00-node.conf
-        dest: /etc/httd/conf.d/00-node.conf
+        dest: /etc/httpd/conf.d/00-node.conf
 
     - name: restart httpd
       service: name=httpd state=restarted

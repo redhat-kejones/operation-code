@@ -48,7 +48,7 @@
 
     - name: extract node.js tarball into /opt/node
       unarchive:
-        src: node-v8.9.4-linux-x64.tar.xz
+        src: /home/centos/node-v8.9.4-linux-x64.tar.xz
         dest: /opt/node
 
     - name: change ownership of /opt/node recursively

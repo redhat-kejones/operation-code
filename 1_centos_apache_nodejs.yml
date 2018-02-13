@@ -82,10 +82,14 @@
       command: "pm2 startup systemd -u centos --hp /home/centos"
 
     - name: start operation-code hello node.js app with pm2
+      become: yes
+      become_user: centos
       command: "pm2 start /home/centos/operation-code/hello.js"
       ignore_errors: yes
 
     - name: save pm2 configuration
+      become: yes
+      become_user: centos
       command: "pm2 save"
 
     - name: enable service httpd and ensure it is not masked
